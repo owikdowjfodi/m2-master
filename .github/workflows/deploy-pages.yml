@@ -1,0 +1,53 @@
+name: Deploy M2 Master to GitHub Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack website source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile
+          archives = sorted(Path('.').glob('m2-master-part-*.zip'))
+          if len(archives) != 3:
+              raise SystemExit('Expected all three source archives')
+          for archive in archives:
+              with zipfile.ZipFile(archive) as z:
+                  for member in z.namelist():
+                      p = Path(member)
+                      if p.is_absolute() or '..' in p.parts:
+                          raise SystemExit('Invalid archive path')
+                  z.extractall('site-source')
+          PY
+      - name: Verify mathematics and question bank
+        working-directory: site-source
+        run: |
+          python3 scripts/build-content.py
+          node scripts/validate-content.cjs
+          node --check docs/app.js
+          node --check docs/study.js
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-source/docs
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment: github-pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
