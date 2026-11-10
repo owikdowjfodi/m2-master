@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack website source
+      - name: Unpack website source and content updates
         shell: bash
         run: |
           python3 - <<'PY'
@@ -22,7 +22,8 @@ jobs:
           archives = sorted(Path('.').glob('m2-master-part-*.zip'))
           if len(archives) != 3:
               raise SystemExit('Expected all three source archives')
-          for archive in archives:
+          updates = sorted(Path('.').glob('m2-master-update-*.zip'))
+          for archive in archives + updates:
               with zipfile.ZipFile(archive) as z:
                   for member in z.namelist():
                       p = Path(member)
@@ -35,6 +36,7 @@ jobs:
         run: |
           python3 scripts/build-content.py
           node scripts/validate-content.cjs
+          if [ -f scripts/validate-refinement.cjs ]; then node scripts/validate-refinement.cjs; fi
           node --check docs/app.js
           node --check docs/study.js
       - uses: actions/upload-pages-artifact@v3
